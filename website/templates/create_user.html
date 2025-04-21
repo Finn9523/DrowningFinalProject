@@ -1,0 +1,15 @@
+{% extends "basic.html" %}
+{% block content %}
+<h2>Tạo tài khoản nhân viên</h2>
+<form method="POST">
+    <input name="email" placeholder="Email" required><br>
+    <input name="username" placeholder="Tên đăng nhập" required><br>
+    <input name="fullname" placeholder="Họ và tên" required><br>
+    <input name="password" placeholder="Mật khẩu" type="password" required><br>
+    <select name="role">
+        <option value="Employee">Nhân viên</option>
+        <option value="Manager">Quản lý</option>
+    </select><br>
+    <button type="submit">Tạo tài khoản</button>
+</form>
+{% endblock %}

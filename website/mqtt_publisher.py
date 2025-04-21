@@ -1,7 +1,7 @@
 # mqtt_publisher.py
 import paho.mqtt.client as mqtt
 
-broker_address = "192.168.1.6"
+broker_address = "192.168.1.10"
 broker_port = 1883
 topic = "drowning/alert"
 

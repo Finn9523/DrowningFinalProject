@@ -10,6 +10,7 @@ from ultralytics import YOLO
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from website.mqtt_publisher import publish_message
+from dotenv import load_dotenv
 
 views = Blueprint('views', __name__)
 
@@ -33,13 +34,18 @@ def get_video_paths():
 
 # Hàm gửi email cảnh báo
 def send_alert_email():
+    # Load biến môi trường từ file .env
+    load_dotenv()
+    api_key = os.getenv("BREVO_API_KEY")
+
+    # Cấu hình với API key từ biến môi trường
     configuration = sib_api_v3_sdk.Configuration()
-    configuration.api_key['api-key'] = "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"  # Thay bằng API Key của bạn
+    configuration.api_key['api-key'] = api_key
 
     api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
     
     sender = {"name": "Hệ thống giám sát", "email": "huynhtan942003@gmail.com"}
-    recipient = [{"email": "tan45385@gmail.com"}]  # Email nhận cảnh báo
+    recipient = [{"email": "tan45385@gmail.com"}]
 
     subject = "⚠️ Cảnh báo đuối nước!"
     html_content = "<h2>Hệ thống phát hiện đuối nước!</h2><p>Vui lòng kiểm tra ngay!</p>"
