@@ -32,7 +32,7 @@
                   {% if user.is_authenticated %}
                     <a class="nav-item nav-link" id="home" href="/">Home</a>
             
-                    {% if user.role == 'Admin' %}
+                    {% if user.Role == 'Admin' %}
                     <a class="nav-item nav-link" id="create-user" href="/create-user">Tạo tài khoản</a>
                     {% endif %}
             

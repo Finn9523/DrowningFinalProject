@@ -11,6 +11,8 @@ import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from website.mqtt_publisher import publish_message
 from dotenv import load_dotenv
+from website.models import Account, LoginRecords
+from website import db
 
 views = Blueprint('views', __name__)
 
@@ -183,6 +185,61 @@ def upload_video():
     
     flash('Định dạng video không hợp lệ!')
     return redirect(url_for('views.home'))
+
+@views.route('/admin.html', methods=['GET', 'POST'])
+@login_required
+def admin_dashboard():
+    if current_user.Role != 'Admin':
+        flash('Bạn không có quyền truy cập!', category='error')
+        return redirect(url_for('views.home'))
+
+    user = None  # ✅ Khởi tạo sớm để tránh lỗi
+    action = None
+
+    if request.method == 'POST':
+        user_id = request.form.get('user_id')
+        action = request.form.get('action')
+        user = Account.query.get(user_id)
+
+        if not user:
+            flash('Không tìm thấy người dùng.', 'error')
+        else:
+            if action == 'toggle_status':
+                if user.Role == 'Admin':
+                    flash('Không thể vô hiệu hóa tài khoản Admin!', 'error')
+                else:
+                    user.is_active = not user.is_active
+                    db.session.commit()
+                    status = 'kích hoạt' if user.is_active else 'vô hiệu hóa'
+                    flash(f'Tài khoản {user.username} đã được {status}', 'success')
+
+            elif action == 'update_role':
+                new_role = request.form.get('new_role')
+                if new_role in ['Manager', 'Employee']:
+                    user.Role = new_role
+                    db.session.commit()
+                    flash(f'Đã cập nhật vai trò của {user.username} thành {new_role}', 'success')
+                else:
+                    flash('Vai trò không hợp lệ!', 'error')
+
+    # Lấy danh sách tài khoản 
+    users = Account.query.filter(Account.Role.in_(['Manager', 'Employee'])).order_by(Account.username).all()
+
+    # Lấy lịch sử đăng nhập,
+    login_records = db.session.query(
+        Account.username, Account.Role, LoginRecords.LoginTime, LoginRecords.IPAddress
+    ).join(
+        LoginRecords, Account.Id == LoginRecords.AccountId
+    ).filter(
+        Account.Role.in_(['Manager', 'Employee'])
+    ).order_by(LoginRecords.LoginTime.desc()).all()
+
+    return render_template("admin.html", user=current_user, login_records=login_records, users=users)
+
+@views.route('/manager.html')
+@login_required
+def manager_dashboard():
+    return render_template('manager.html', user=current_user)
 
 @views.route('/')
 def home():

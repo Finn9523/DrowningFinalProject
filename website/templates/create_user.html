@@ -1,15 +1,144 @@
 {% extends "basic.html" %}
 {% block content %}
-<h2>Tạo tài khoản nhân viên</h2>
-<form method="POST">
-    <input name="email" placeholder="Email" required><br>
-    <input name="username" placeholder="Tên đăng nhập" required><br>
-    <input name="fullname" placeholder="Họ và tên" required><br>
-    <input name="password" placeholder="Mật khẩu" type="password" required><br>
-    <select name="role">
-        <option value="Employee">Nhân viên</option>
-        <option value="Manager">Quản lý</option>
-    </select><br>
-    <button type="submit">Tạo tài khoản</button>
-</form>
+<div class="container mt-5">
+    <div class="card shadow-lg p-4 border-0 rounded-4">
+        <h3 class="text-center text-primary fw-bold mb-4">Đăng ký tài khoản</h3>
+
+        <form method="POST">
+            <div class="form-group mb-3">
+                <label for="username">Tên đăng nhập</label>
+                <input 
+                    type="text" 
+                    class="form-control" 
+                    id="username" 
+                    name="username" 
+                    placeholder="Nhập tên đăng nhập" 
+                    required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="fullname">Họ và tên</label>
+                <input 
+                    type="text" 
+                    class="form-control" 
+                    id="fullname" 
+                    name="fullname" 
+                    placeholder="Nhập họ và tên" 
+                    required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="email">Email</label>
+                <input 
+                    type="email" 
+                    class="form-control" 
+                    id="email" 
+                    name="email" 
+                    placeholder="Nhập email" 
+                    required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="phone">Số điện thoại</label>
+                <div class="d-flex">
+                    <!-- Dropdown chọn mã vùng -->
+                    <select id="country-code" name="country_code" class="form-control w-25" required>
+                        <option value="+84">+84 (Việt Nam)</option>
+                        <option value="+1">+1 (Mỹ)</option>
+                        <option value="+44">+44 (Anh)</option>
+                        <option value="+61">+61 (Úc)</option>
+                        <!-- Thêm các mã vùng khác nếu cần -->
+                    </select>
+            
+                    <!-- Input số điện thoại -->
+                    <input 
+                        type="text" 
+                        class="form-control ms-2" 
+                        id="phone" 
+                        name="phone" 
+                        placeholder="Nhập số điện thoại" 
+                        required />
+                </div>
+            </div>
+            
+            <div class="form-group mb-3">
+                <label for="password1">Mật khẩu</label>
+                <input 
+                    type="password" 
+                    class="form-control" 
+                    id="password" 
+                    name="password" 
+                    placeholder="Nhập mật khẩu" 
+                    required />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="password2">Xác nhận mật khẩu</label>
+                <input 
+                    type="password" 
+                    class="form-control" 
+                    id="confirmpassword" 
+                    name="confirmpassword" 
+                    placeholder="Xác nhận mật khẩu" 
+                    required />
+            </div>
+
+            <select name="role">
+                <option value="Employee">Nhân viên</option>
+                <option value="Manager">Quản lý</option>
+            </select><br>
+
+            <div class="text-center mt-4">
+                <button type="submit" class="btn btn-primary px-4">
+                    Đăng ký
+                </button>
+            </div>
+
+            <div class="text-center mt-3">
+                <p>Đã có tài khoản? <a href="{{ url_for('auth.login') }}">Đăng nhập ngay</a></p>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
+<script>
+    document.querySelector('form').addEventListener('submit', function(event) {
+        var phoneInput = document.getElementById('phone').value;
+        var countryCode = document.getElementById('country-code').value;
+        var phoneRegex;
+        var errorMessage = document.getElementById('phone-error');
+
+        // Tạo regex dựa trên mã vùng được chọn
+        switch (countryCode) {
+            case '+84':
+                phoneRegex = /^\+84\d{9}$/; // 9 chữ số sau +84
+                break;
+            case '+1':
+                phoneRegex = /^\+1\d{10}$/; // 10 chữ số sau +1
+                break;
+            case '+44':
+                phoneRegex = /^\+44\d{10}$/; // 10 chữ số sau +44
+                break;
+            case '+61':
+                phoneRegex = /^\+61\d{9}$/; // 9 chữ số sau +61
+                break;
+            // Thêm các trường hợp khác nếu cần
+            default:
+                phoneRegex = /^\+\d{1,3}\d+$/; // Phạm vi tổng quát cho tất cả mã vùng
+        }
+
+        // Kiểm tra số điện thoại nhập vào
+        if (!phoneRegex.test(countryCode + phoneInput)) {
+            errorMessage.style.display = 'block';  // Hiển thị thông báo lỗi
+            event.preventDefault(); // Ngừng việc gửi form
+        } else {
+            errorMessage.style.display = 'none'; // Ẩn thông báo lỗi nếu nhập đúng
+        }
+    });
+
+    // Đảm bảo rằng khi người dùng thay đổi mã vùng, thông báo lỗi sẽ được ẩn đi
+    document.getElementById('country-code').addEventListener('change', function() {
+        var errorMessage = document.getElementById('phone-error');
+        errorMessage.style.display = 'none'; // Ẩn thông báo lỗi khi thay đổi mã vùng
+    });
+</script>
