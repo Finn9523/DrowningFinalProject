@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager</title>
+</head>
+<body>
+    <h2>Manager Panel</h2>
+    <h3>Lịch sử cảnh báo</h3>
+    <p>Ngày đăng nhập cuối: {{ user.last_login }}</p>
+    <ul>
+        {% for alert in alerts %}
+            <li>Camera {{ alert.camera_id }} - {{ alert.status }}</li>
+        {% endfor %}
+    </ul>
+    <a href="{{ url_for('auth.logout') }}">Logout</a>
+</body>
+</html>
