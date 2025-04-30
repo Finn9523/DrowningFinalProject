@@ -11,8 +11,9 @@ import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from website.mqtt_publisher import publish_message
 from dotenv import load_dotenv
-from website.models import Account, LoginRecords
-from website import db
+from website.models import Account
+from bson.objectid import ObjectId
+from website import mongo
 
 views = Blueprint('views', __name__)
 
@@ -123,7 +124,7 @@ def process_video(video_path, frame_queue):
         # Cảnh báo nếu liên tục đủ số frame đuối nước
         if drowning_frame_count >= drowning_threshold and not email_sent:
             send_alert_email()
-            publish_message("CẢNH BÁO: Phát hiện đuối nước!")
+            publish_message("True")
             email_sent = True
 
         frame_queue.put((frame, is_drowning))
@@ -193,46 +194,55 @@ def admin_dashboard():
         flash('Bạn không có quyền truy cập!', category='error')
         return redirect(url_for('views.home'))
 
-    user = None  # ✅ Khởi tạo sớm để tránh lỗi
-    action = None
-
     if request.method == 'POST':
         user_id = request.form.get('user_id')
         action = request.form.get('action')
-        user = Account.query.get(user_id)
 
-        if not user:
-            flash('Không tìm thấy người dùng.', 'error')
+        if not ObjectId.is_valid(user_id):
+            flash('ID không hợp lệ.', 'error')
         else:
-            if action == 'toggle_status':
-                if user.Role == 'Admin':
-                    flash('Không thể vô hiệu hóa tài khoản Admin!', 'error')
-                else:
-                    user.is_active = not user.is_active
-                    db.session.commit()
-                    status = 'kích hoạt' if user.is_active else 'vô hiệu hóa'
-                    flash(f'Tài khoản {user.username} đã được {status}', 'success')
+            user_doc = mongo.db.accounts.find_one({'_id': ObjectId(user_id)})
+            if not user_doc:
+                flash('Không tìm thấy người dùng.', 'error')
+            else:
+                if action == 'toggle_status':
+                    if user_doc['Role'] == 'Admin':
+                        flash('Không thể vô hiệu hóa tài khoản Admin!', 'error')
+                    else:
+                        new_status = not user_doc.get('IsActive', True)
+                        mongo.db.accounts.update_one({'_id': ObjectId(user_id)}, {'$set': {'IsActive': new_status}})
+                        status = 'kích hoạt' if new_status else 'vô hiệu hóa'
+                        flash(f"Tài khoản {user_doc['Username']} đã được {status}", 'success')
 
-            elif action == 'update_role':
-                new_role = request.form.get('new_role')
-                if new_role in ['Manager', 'Employee']:
-                    user.Role = new_role
-                    db.session.commit()
-                    flash(f'Đã cập nhật vai trò của {user.username} thành {new_role}', 'success')
-                else:
-                    flash('Vai trò không hợp lệ!', 'error')
+                elif action == 'update_role':
+                    new_role = request.form.get('new_role')
+                    if new_role in ['Manager', 'Employee']:
+                        mongo.db.accounts.update_one({'_id': ObjectId(user_id)}, {'$set': {'Role': new_role}})
+                        flash(f"Đã cập nhật vai trò của {user_doc['Username']} thành {new_role}", 'success')
+                    else:
+                        flash('Vai trò không hợp lệ!', 'error')
 
-    # Lấy danh sách tài khoản 
-    users = Account.query.filter(Account.Role.in_(['Manager', 'Employee'])).order_by(Account.username).all()
+    user_docs = list(mongo.db.accounts.find({'Role': {'$in': ['Manager', 'Employee']}}))
+    users = [Account(doc) for doc in user_docs]
 
-    # Lấy lịch sử đăng nhập,
-    login_records = db.session.query(
-        Account.username, Account.Role, LoginRecords.LoginTime, LoginRecords.IPAddress
-    ).join(
-        LoginRecords, Account.Id == LoginRecords.AccountId
-    ).filter(
-        Account.Role.in_(['Manager', 'Employee'])
-    ).order_by(LoginRecords.LoginTime.desc()).all()
+    # Tạo bản đồ user theo _id để tra nhanh
+    account_map = {str(doc['_id']): doc for doc in user_docs}
+
+    # Lấy tất cả bản ghi đăng nhập, sắp xếp giảm dần theo LoginTime
+    login_docs = list(mongo.db.login_records.find().sort('LoginTime', -1))
+
+    login_records = []
+    for record in login_docs:
+        acc_id = record.get('AccountRef')
+        if acc_id and ObjectId.is_valid(str(acc_id)):
+            acc_doc = account_map.get(str(acc_id))
+            if acc_doc:  # chỉ lấy nếu Role là Manager/Employee
+                login_records.append({
+                    'Username': acc_doc.get('Username'),
+                    'Role': acc_doc.get('Role'),
+                    'LoginTime': record.get('LoginTime'),
+                    'IPAddress': record.get('IPAddress') if record.get('IPAddress') else 'Không xác định'
+                })
 
     return render_template("admin.html", user=current_user, login_records=login_records, users=users)
 

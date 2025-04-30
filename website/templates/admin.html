@@ -113,7 +113,7 @@
         <tbody>
           {% for user in users %}
           <tr>
-            <td>{{ user.username }}</td>
+            <td>{{ user.Username }}</td>
             <td class="text-center">
               <span
                 class="badge bg-{% if user.Role == 'Admin' %}danger{% elif user.Role == 'Manager' %}warning text-dark{% else %}info text-dark{% endif %}">
@@ -121,13 +121,13 @@
               </span>
             </td>
             <td class="text-center">
-              <span class="badge bg-{% if user.is_active %}success{% else %}secondary{% endif %}">
-                {% if user.is_active %}Hoạt động{% else %}Vô hiệu hóa{% endif %}
+              <span class="badge bg-{% if user.IsActive %}success{% else %}secondary{% endif %}">
+                {% if user.IsActive %}Hoạt động{% else %}Vô hiệu hóa{% endif %}
               </span>
             </td>
             <td class="text-center">
               <form method="POST" class="d-flex flex-wrap gap-2 justify-content-center">
-                <input type="hidden" name="user_id" value="{{ user.Id }}">
+                <input type="hidden" name="user_id" value="{{ user.id }}">
                 <select name="new_role" class="form-select form-select-sm w-auto mb-2">
                   <option value="Manager" {% if user.Role == 'Manager' %}selected{% endif %}>Manager</option>
                   <option value="Employee" {% if user.Role == 'Employee' %}selected{% endif %}>Employee</option>
@@ -136,8 +136,8 @@
                   <i class="fas fa-edit"></i>
                 </button>
                 <button type="submit" name="action" value="toggle_status"
-                  class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-success{% endif %}">
-                  <i class="fas {% if user.is_active %}fa-ban{% else %}fa-check{% endif %}"></i>
+                  class="btn btn-sm {% if user.IsActive %}btn-danger{% else %}btn-success{% endif %}">
+                  <i class="fas {% if user.IsActive %}fa-ban{% else %}fa-check{% endif %}"></i>
                 </button>
               </form>
             </td>
@@ -150,26 +150,31 @@
         <i class="fas fa-history me-2"></i>Lịch sử đăng nhập gần đây
     </h4>
     <div class="list-group shadow-sm rounded-4 overflow-hidden">
-        {% for record in login_records|sort(attribute='LoginTime', reverse=True) %}
+        {% for record in login_records %}
         <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-start">
             <div class="ms-2 me-auto">
                 <div class="fw-bold text-primary">
-                    <i class="fas fa-user-circle me-1"></i>{{ record.username }}
+                    <i class="fas fa-user-circle me-1"></i>{{ record.Username }}
                     <span class="badge bg-{% if record.Role == 'Admin' %}danger{% elif record.Role == 'Manager' %}warning text-dark{% else %}info text-dark{% endif %} ms-2">
                         {{ record.Role }}
                     </span>
                 </div>
                 <small class="text-muted">
                     <i class="fas fa-clock me-1"></i>{{ record.LoginTime.strftime('%d/%m/%Y %H:%M:%S') }} |
-                    <i class="fas fa-network-wired me-1"></i>{{ record.IPAddress if record.IPAddress else 'Không xác định' }}
+                    <i class="fas fa-network-wired me-1"></i>{{ record.IPAddress }}
                 </small>
             </div>
             <span class="badge bg-success align-self-center">
                 <i class="fas fa-check-circle me-1"></i> Đăng nhập
             </span>
         </div>
+        {% else %}
+        <div class="list-group-item">
+            <em>Chưa có dữ liệu đăng nhập.</em>
+        </div>
         {% endfor %}
     </div>
+    
     
 
     </div>
