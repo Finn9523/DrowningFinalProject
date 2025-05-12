@@ -1,7 +1,5 @@
 import os
 import cv2
-import time
-import threading
 from flask import Blueprint, render_template, flash, redirect, request, url_for, Response
 from flask_login import login_required, current_user
 from ultralytics import YOLO
@@ -48,6 +46,7 @@ def send_alert_email():
 
 # ---------- XỬ LÝ VIDEO QUA RTSP ----------
 @views.route('/video_feed')
+@login_required
 def video_feed():
     def generate_frames():
         cap = cv2.VideoCapture("rtsp://192.168.1.13:8554/cam", cv2.CAP_FFMPEG)
@@ -167,10 +166,42 @@ def admin_dashboard():
 @views.route('/manager.html')
 @login_required
 def manager_dashboard():
-    return render_template('manager.html', user=current_user)
+    if current_user.Role not in ['Admin', 'Manager']:
+        flash('Bạn không có quyền truy cập!', category='error')
+        return redirect(url_for('views.home'))
+    return render_template('home.html', user=current_user)
 
+# ---------- EMPLOYEE ----------
+@views.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    user = mongo.db.accounts.find_one({'Username': username})
+    if not user or not check_password_hash(user['Password'], password):
+        return jsonify({'status': 'fail', 'message': 'Sai tài khoản hoặc mật khẩu'}), 401
+
+    if user['Role'] != 'Employee':
+        return jsonify({'status': 'fail', 'message': 'Không phải tài khoản nhân viên'}), 403
+
+    # Có thể trả JWT hoặc dữ liệu người dùng
+    return jsonify({
+        'status': 'success',
+        'message': 'Đăng nhập thành công',
+        'user': {
+            'username': user['Username'],
+            'role': user['Role'],
+            'id': str(user['_id'])
+        }
+    })
 
 # ---------- TRANG HOME ----------
 @views.route('/')
+@login_required
 def home():
-    return render_template('home.html', user=current_user)
+    if current_user.Role in ['Admin', 'Manager']:
+        return render_template('home.html', user=current_user)
+    else:
+        flash('Bạn không có quyền truy cập trang này.', 'error')
+        return redirect(url_for('auth.logout'))

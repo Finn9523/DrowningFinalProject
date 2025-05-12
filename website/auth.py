@@ -36,8 +36,11 @@ def login():
 
                 if user.Role == 'Admin':
                     return redirect(url_for('views.admin_dashboard'))
+                elif user.Role == 'Manager':
+                    return redirect(url_for('views.home'))  # vì home là dành cho manager
                 else:
-                    return redirect(url_for('views.home'))
+                    flash('Bạn không có quyền truy cập.', 'error')
+                    return redirect(url_for('auth.logout'))
             else:
                 flash('Mật khẩu không đúng.', category='error')
         else:
