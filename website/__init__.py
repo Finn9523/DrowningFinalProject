@@ -1,17 +1,20 @@
 from flask import Flask
 from flask_login import LoginManager
+import os
 from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
+from dotenv import load_dotenv
 
 mongo = PyMongo()
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
+load_dotenv()
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'thienngocluong'
-    app.config['MONGO_URI'] = 'mongodb://localhost:27017/IoT'
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+    app.config['MONGO_URI'] = os.getenv('MONGO_URI')
 
     mongo.init_app(app)
     login_manager.init_app(app)

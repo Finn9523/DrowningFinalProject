@@ -10,12 +10,16 @@ from dotenv import load_dotenv
 from website.models import Account
 from bson.objectid import ObjectId
 from website import mongo
+import threading
+import socket
+import struct
+import numpy as np
 
 views = Blueprint('views', __name__)
 
 model = YOLO("website/static/models/best.pt")
 
-latest_frame = None
+current_frame = None
 
 # ---------- GỬI EMAIL CẢNH BÁO ----------
 def send_alert_email():
@@ -43,66 +47,86 @@ def send_alert_email():
     except ApiException as e:
         print(f"❌ Lỗi gửi email: {e}")
 
+# --- Thread: Nhận ảnh từ Raspberry Pi qua TCP socket ---
+def receive_frames():
+    global current_frame
+    HOST = ''
+    PORT = 5000
 
-# ---------- XỬ LÝ VIDEO QUA RTSP ----------
-@views.route('/video_feed')
-@login_required
-def video_feed():
-    def generate_frames():
-        cap = cv2.VideoCapture("rtsp://192.168.1.13:8554/cam", cv2.CAP_FFMPEG)
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.bind((HOST, PORT))
+    server_sock.listen(1)
+    print(f"[SERVER] Đang lắng nghe tại cổng {PORT}...")
 
-        if not cap.isOpened():
-            print("❌ Không thể mở RTSP stream.")
-            return
+    conn, addr = server_sock.accept()
+    print(f"[SERVER] Client đã kết nối: {addr}")
 
-        email_sent = False
-        drowning_frame_count = 0
-        threshold = 30  # số frame liên tục phát hiện đuối nước để gửi cảnh báo
+    data_buffer = b''
+    payload_size = struct.calcsize('>L')  # 4 byte
 
+    try:
         while True:
-            success, frame = cap.read()
-            if not success:
-                print("⚠️ Không đọc được frame.")
+            while len(data_buffer) < payload_size:
+                packet = conn.recv(4096)
+                if not packet:
+                    break
+                data_buffer += packet
+            if len(data_buffer) < payload_size:
                 break
 
-            frame_resized = cv2.resize(frame, (640, 360))
+            packed_len = data_buffer[:payload_size]
+            data_buffer = data_buffer[payload_size:]
+            msg_size = struct.unpack('>L', packed_len)[0]
 
-            # ------ YOLO xử lý frame ------
-            is_drowning = False
-            results = model(frame_resized)  # model đã load trước ở đâu đó
+            while len(data_buffer) < msg_size:
+                packet = conn.recv(4096)
+                if not packet:
+                    break
+                data_buffer += packet
+            if len(data_buffer) < msg_size:
+                break
 
-            for r in results:
-                for i in range(len(r.boxes.cls)):
-                    class_id = int(r.boxes.cls[i])
-                    label = model.names[class_id]  # lấy tên nhãn từ model
+            frame_data = data_buffer[:msg_size]
+            data_buffer = data_buffer[msg_size:]
 
-                    if label == "drowning":
-                        is_drowning = True
-                        break
+            frame = cv2.imdecode(np.frombuffer(frame_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if frame is not None:
+                current_frame = frame
 
-            # ------ Cảnh báo nếu phát hiện đuối nước nhiều frame ------
-            drowning_frame_count = drowning_frame_count + 1 if is_drowning else 0
+    except Exception as e:
+        print(f"[SERVER] Lỗi: {e}")
+    finally:
+        conn.close()
+        server_sock.close()
 
-            if drowning_frame_count >= threshold and not email_sent:
-                send_alert_email()
-                publish_message("True")
-                email_sent = True
-                print("🚨 Gửi cảnh báo! Đuối nước phát hiện.")
+# --- MJPEG generator ---
+def generate_stream():
+    global current_frame
+    while True:
+        if current_frame is None:
+            continue
+        resized_frame = cv2.resize(current_frame, (640, 360))
 
-            if not is_drowning:
-                email_sent = False  # reset lại nếu bình thường
+        # Chạy YOLO
+        results = model(resized_frame)
 
-            # ------ Vẽ khung từ YOLO ------
-            frame_with_boxes = results[0].plot()
+        # Vẽ bounding boxes lên ảnh
+        frame_with_boxes = results[0].plot()
 
-            # ------ Encode & gửi frame ------
-            _, buffer = cv2.imencode('.jpg', frame_with_boxes)
-            frame_bytes = buffer.tobytes()
+        ret, jpeg = cv2.imencode('.jpg', frame_with_boxes)
+        if not ret:
+            continue
 
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        frame = jpeg.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+@views.route('/video_feed')
+@login_required
+def video_feed():            
+    return Response(generate_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+threading.Thread(target=receive_frames, daemon=True).start()
 
 # ---------- DASHBOARD ADMIN ----------
 @views.route('/admin.html', methods=['GET', 'POST'])
@@ -161,7 +185,6 @@ def admin_dashboard():
 
     return render_template("admin.html", user=current_user, login_records=login_records, users=users)
 
-
 # ---------- DASHBOARD MANAGER ----------
 @views.route('/manager.html')
 @login_required
@@ -205,3 +228,5 @@ def home():
     else:
         flash('Bạn không có quyền truy cập trang này.', 'error')
         return redirect(url_for('auth.logout'))
+
+
