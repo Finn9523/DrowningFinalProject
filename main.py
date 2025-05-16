@@ -5,4 +5,4 @@ app = create_app()
 
 if __name__ == '__main__':
     connect_mqtt()  # Kết nối MQTT khi web start
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    app.run(host='0.0.0.0', port=8000, debug=False)

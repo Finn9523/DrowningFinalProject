@@ -10,16 +10,13 @@ from dotenv import load_dotenv
 from website.models import Account
 from bson.objectid import ObjectId
 from website import mongo
-import threading
-import socket
-import struct
-import numpy as np
+import website.frame_receiver as rf
 
 views = Blueprint('views', __name__)
 
 model = YOLO("website/static/models/best.pt")
 
-current_frame = None
+print(rf)
 
 # ---------- GỬI EMAIL CẢNH BÁO ----------
 def send_alert_email():
@@ -47,65 +44,19 @@ def send_alert_email():
     except ApiException as e:
         print(f"❌ Lỗi gửi email: {e}")
 
-# --- Thread: Nhận ảnh từ Raspberry Pi qua TCP socket ---
-def receive_frames():
-    global current_frame
-    HOST = ''
-    PORT = 5000
-
-    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_sock.bind((HOST, PORT))
-    server_sock.listen(1)
-    print(f"[SERVER] Đang lắng nghe tại cổng {PORT}...")
-
-    conn, addr = server_sock.accept()
-    print(f"[SERVER] Client đã kết nối: {addr}")
-
-    data_buffer = b''
-    payload_size = struct.calcsize('>L')  # 4 byte
-
-    try:
-        while True:
-            while len(data_buffer) < payload_size:
-                packet = conn.recv(4096)
-                if not packet:
-                    break
-                data_buffer += packet
-            if len(data_buffer) < payload_size:
-                break
-
-            packed_len = data_buffer[:payload_size]
-            data_buffer = data_buffer[payload_size:]
-            msg_size = struct.unpack('>L', packed_len)[0]
-
-            while len(data_buffer) < msg_size:
-                packet = conn.recv(4096)
-                if not packet:
-                    break
-                data_buffer += packet
-            if len(data_buffer) < msg_size:
-                break
-
-            frame_data = data_buffer[:msg_size]
-            data_buffer = data_buffer[msg_size:]
-
-            frame = cv2.imdecode(np.frombuffer(frame_data, dtype=np.uint8), cv2.IMREAD_COLOR)
-            if frame is not None:
-                current_frame = frame
-
-    except Exception as e:
-        print(f"[SERVER] Lỗi: {e}")
-    finally:
-        conn.close()
-        server_sock.close()
-
 # --- MJPEG generator ---
 def generate_stream():
-    global current_frame
     while True:
-        if current_frame is None:
+        with rf.frame_condition:
+            rf.frame_condition.wait()
+            if rf.current_frame is None:
+                print("No frame received")
+                continue
+            frame = rf.current_frame.copy()
+
+        if frame is None:
             continue
-        resized_frame = cv2.resize(current_frame, (640, 360))
+        resized_frame = cv2.resize(rf.current_frame, (640, 360))
 
         # Chạy YOLO
         results = model(resized_frame)
@@ -121,15 +72,13 @@ def generate_stream():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-@views.route('/video_feed')
+@views.route("/video_feed")
 @login_required
 def video_feed():            
     return Response(generate_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-threading.Thread(target=receive_frames, daemon=True).start()
-
 # ---------- DASHBOARD ADMIN ----------
-@views.route('/admin.html', methods=['GET', 'POST'])
+@views.route("/admin.html", methods=['GET', 'POST'])
 @login_required
 def admin_dashboard():
     if current_user.Role != 'Admin':
@@ -186,7 +135,7 @@ def admin_dashboard():
     return render_template("admin.html", user=current_user, login_records=login_records, users=users)
 
 # ---------- DASHBOARD MANAGER ----------
-@views.route('/manager.html')
+@views.route("/manager.html")
 @login_required
 def manager_dashboard():
     if current_user.Role not in ['Admin', 'Manager']:

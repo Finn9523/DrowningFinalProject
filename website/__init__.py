@@ -5,6 +5,8 @@ from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
+from website.frame_receiver import receive_frames
+import threading
 
 mongo = PyMongo()
 login_manager = LoginManager()
@@ -35,5 +37,7 @@ def create_app():
 
     app.register_blueprint(views, url_prefix='/')
     app.register_blueprint(auth, url_prefix='/')
+
+    threading.Thread(target=receive_frames, daemon=True).start()
 
     return app
