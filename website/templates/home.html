@@ -3,122 +3,284 @@
 {% block title %}🌊 Hệ thống giám sát đuối nước{% endblock %}
 
 {% block content %}
+<div class="logout-container" style="position: fixed; top: 20px; right: 20px;">
+    <form id="logout-form" action="{{ url_for('auth.logout') }}" method="POST" style="display: inline;">
+        <button type="submit" class="logout-button">🚪 Đăng xuất</button>
+    </form>
+</div>
+
 <h1 class="title">🌊 Hệ thống giám sát đuối nước</h1>
 
 <!-- Đèn cảnh báo -->
 <div class="status-container">
-    <div id="status-green" class="status-light green active">✅ Bình thường</div>
-    <div id="status-red" class="status-light red">🚨 Nguy hiểm</div>
+    <div id="status-green" class="status-light green active" aria-live="polite" role="status">
+        <div class="icon" aria-hidden="true">✅</div>
+        <div class="label">Bình thường</div>
+    </div>
+    <div id="status-red" class="status-light red" aria-live="polite" role="alert">
+        <div class="icon" aria-hidden="true">🚨</div>
+        <div class="label">Nguy hiểm</div>
+    </div>
 </div>
 
-<!-- Camera trực tiếp -->
-<div class="camera-container">
+<!-- Link xem thống kê -->
+<div class="email-log-link">
+    <button id="view-email-stats" class="email-button">📧 Xem thống kê email cảnh báo</button>
+</div>
+
+<!-- Hộp thống kê -->
+<div id="email-stats-box">
+    <div class="header">
+        <strong>Email cảnh báo gần nhất</strong>
+        <button class="close-btn" onclick="closeStatsBox()">✖</button>
+    </div>
+    <div class="content">
+        <div>📧 <span id="email-address"></span></div>
+        <div>📄 <span id="email-content"></span></div>
+        <div>🕒 <span id="email-date"></span></div>
+    </div>
+</div>
+
+<!-- Camera -->
+<div class="camera-container" aria-label="Camera trực tiếp">
     <h2>📹 Camera trực tiếp</h2>
-    <img src="{{ url_for('views.video_feed') }}">
+    <img src="{{ url_for('views.video_feed') }}" alt="Camera trực tiếp" class="camera-feed" />
 </div>
 
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-    function updateStatus(isDrowning) {
-        const greenLight = document.getElementById('status-green');
-        const redLight = document.getElementById('status-red');
-
-        if (isDrowning) {
-            greenLight.classList.remove('active');
-            redLight.classList.add('active');
-        } else {
-            redLight.classList.remove('active');
-            greenLight.classList.add('active');
+    $(document).ready(function () {
+        // Gọi API /status để lấy trạng thái đuối nước
+        function fetchStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => updateStatus(data.is_drowning))
+                .catch(error => console.error('❌ Lỗi khi fetch /status:', error));
         }
-    }
+
+        // Cập nhật đèn cảnh báo theo trạng thái
+        function updateStatus(isDrowning) {
+            const green = document.getElementById('status-green');
+            const red = document.getElementById('status-red');
+            if (isDrowning) {
+                green.classList.remove('active');
+                red.classList.add('active');
+            } else {
+                red.classList.remove('active');
+                green.classList.add('active');
+            }
+        }
+
+        // Xử lý đóng box hiển thị thông tin email
+        function closeStatsBox() {
+            document.getElementById('email-stats-box').classList.remove('visible');
+        }
+
+        // Gán hàm cho global để dùng onclick="closeStatsBox()" từ HTML
+        window.closeStatsBox = closeStatsBox;
+
+        // Xử lý khi người dùng bấm "Xem thống kê email"
+        document.getElementById('view-email-stats').addEventListener('click', function (e) {
+            e.preventDefault();
+
+            fetch('/email-stats')
+                .then(response => {
+                    if (!response.ok) {
+                        throw response;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('email-address').innerText = data.email || 'Không có';
+                    document.getElementById('email-content').innerText = data.content || 'Không có nội dung';
+                    document.getElementById('email-date').innerText = data.date || 'Không rõ thời gian';
+                    document.getElementById('email-stats-box').classList.add('visible');
+                })
+                .catch(error => {
+                    let msg = 'Không thể tải dữ liệu';
+                    if (error.status === 403) msg = 'Không có quyền truy cập';
+                    document.getElementById('email-address').innerText = msg;
+                    document.getElementById('email-content').innerText = 'Kiểm tra tài khoản hoặc mạng';
+                    document.getElementById('email-date').innerText = '';
+                    document.getElementById('email-stats-box').classList.add('visible');
+                });
+        });
+
+        // Gọi định kỳ để cập nhật đèn cảnh báo mỗi 2 giây
+        fetchStatus();
+        setInterval(fetchStatus, 2000);
+    });
 </script>
 
+<!-- Style -->
 <style>
-    /* Cơ bản */
     body {
         margin: 0;
         font-family: 'Poppins', sans-serif;
-        background: linear-gradient(to right, #1e3c72, #2a5298);
-        color: #fff;
-        line-height: 1.6;
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        color: #f0f0f0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        box-sizing: border-box;
     }
 
     .title {
-        text-align: center;
-        font-size: 2.5rem;
-        margin: 20px 0;
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 40px;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.7);
     }
 
-    /* Đèn cảnh báo */
     .status-container {
         display: flex;
+        gap: 40px;
         justify-content: center;
-        gap: 20px;
-        margin: 20px 0;
+        margin-bottom: 50px;
+        flex-wrap: wrap;
+        max-width: 600px;
     }
 
     .status-light {
-        padding: 20px;
+        background: rgba(255, 255, 255, 0.1);
         border-radius: 50%;
-        text-align: center;
-        font-weight: bold;
-        width: 120px;
-        opacity: 0.5;
-        transition: transform 0.3s;
+        width: 140px;
+        height: 140px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.4;
+        transition: transform 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease;
+    }
+
+    .status-light .icon {
+        font-size: 3.5rem;
+        margin-bottom: 12px;
+    }
+
+    .status-light .label {
+        font-weight: 600;
+        font-size: 1.1rem;
     }
 
     .status-light.active {
-        transform: scale(1.2);
         opacity: 1;
+        transform: scale(1.25);
     }
 
-    .green {
+    .green.active {
         background-color: #28a745;
+        box-shadow: 0 0 30px #28a745, 0 0 60px #28a745cc;
     }
 
-    .red {
+    .red.active {
         background-color: #dc3545;
+        box-shadow: 0 0 30px #dc3545, 0 0 60px #dc3545cc;
+        animation: pulse-red 2s infinite;
     }
 
-    /* Bố cục chính */
-    .layout-container {
+    @keyframes pulse-red {
+        0%, 100% {
+            box-shadow: 0 0 30px #dc3545, 0 0 60px #dc3545cc;
+        }
+        50% {
+            box-shadow: 0 0 40px #ff4c4c, 0 0 80px #ff4c4ccc;
+        }
+    }
+
+    .camera-container {
+        width: 700px;
+        max-width: 90vw;
+        background: rgba(255,255,255,0.07);
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        text-align: center;
+    }
+
+    .camera-feed {
+        width: 100%;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+        border: 3px solid rgba(255,255,255,0.15);
+        background-color: #000;
+    }
+
+    #email-stats-box {
+        position: fixed;
+        top: 80px;
+        right: -400px;
+        width: 300px;
+        background: #fff;
+        color: #000;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        z-index: 9999;
+        transition: right 0.5s ease;
+    }
+
+    #email-stats-box.visible {
+        right: 30px;
+    }
+
+    #email-stats-box .header {
         display: flex;
-        height: 80vh;
-        gap: 20px;
+        justify-content: space-between;
+        align-items: center;
     }
 
+    #email-stats-box .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+    }
+
+    #email-stats-box .content {
+        margin-top: 10px;
+    }
+
+    .logout-button {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    .logout-button:hover {
+        background-color: #b02a37;
+    }
+
+    @media (max-width: 768px) {
+        .status-light {
+            width: 110px;
+            height: 110px;
+        }
+
+        .camera-container {
+            width: 100%;
+            padding: 15px;
+        }
+
+        #email-stats-box {
+            width: 90%;
+            right: -100%;
+        }
+
+        #email-stats-box.visible {
+            right: 5%;
+        }
+    }
 </style>
-
 {% endblock %}
-<!-- Khu vực tải video
-<div class="upload-container">
-    <h2>Tải video mới lên</h2>
-    <form id="uploadForm" action="{{ url_for('views.upload_video') }}" method="POST" enctype="multipart/form-data" class="upload-form">
-        <input type="file" name="video" accept="video/*" required>
-        <button type="submit" class="upload-btn">Tải lên 📤</button>
-    </form>
-</div>
-
- Khu vực hiển thị video 
-<div class="layout-container">
-    <div class="video-grid" id="video-display">
-        {% if videos_paths %}
-            {% for video in videos_paths %}
-                <img id="video-{{ loop.index0 }}" 
-                     src="{{ url_for('views.video_feed', video_index=loop.index0) }}" 
-                     class="video-thumbnail" 
-                     data-index="{{ loop.index0 }}">
-            {% endfor %}
-        {% else %}
-            <p class="no-video">Không có video nào được tải lên.</p>
-        {% endif %}
-    </div>
-
-    Danh sách nút chọn video
-    <div class="controls-section">
-        <h3>🎥 Chọn video</h3>
-        {% for video in videos_paths %}
-            <button id="btn-{{ loop.index0 }}" onclick="toggleVideo({{ loop.index0 }})">
-                Video {{ loop.index }}
-            </button>
-        {% endfor %}
-    </div> -->
